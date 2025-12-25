@@ -3,6 +3,7 @@ import { getT } from '@gitroom/react/translation/get.translation.service.backend
 export const dynamic = 'force-dynamic';
 import { ReactNode } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import clsx from 'clsx';
 import loadDynamic from 'next/dynamic';
 import { isGeneralServerSide } from '@gitroom/helpers/utils/is.general.server.side';
@@ -18,6 +19,14 @@ export default async function AuthLayout({
     <div className="dark !bg-black lbox">
       <ReturnUrlComponent />
       <div className="absolute start-0 top-0 z-[0] h-[100vh] w-[100vw] overflow-hidden bg-loginBg bg-contain bg-no-repeat bg-left-top" />
+      <div className="fixed bottom-4 left-0 right-0 z-10 flex justify-center gap-6 text-sm text-gray-400">
+        <Link href="/legal/privacy" className="hover:text-white hover:underline">
+          {t('privacy_policy', 'Privacy Policy')}
+        </Link>
+        <Link href="/legal/terms" className="hover:text-white hover:underline">
+          {t('terms_of_service', 'Terms of Service')}
+        </Link>
+      </div>
       <div className="relative z-[1] px-3 lg:pr-[100px] xs:mt-[70px] flex justify-center lg:justify-end items-center h-[100vh] w-[100vw] overflow-hidden">
         <div className="w-full max-w-lg h-[614px] flex flex-col bg-loginBox bg-no-repeat bg-contain">
           <div className="w-full relative">

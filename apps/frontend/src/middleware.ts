@@ -38,7 +38,9 @@ export async function middleware(request: NextRequest) {
   if (
     nextUrl.pathname.startsWith('/uploads/') ||
     nextUrl.pathname.startsWith('/p/') ||
-    nextUrl.pathname.startsWith('/icons/')
+    nextUrl.pathname.startsWith('/icons/') ||
+    nextUrl.pathname.startsWith('/legal/') ||
+    nextUrl.pathname === '/home'
   ) {
     return topResponse;
   }
@@ -65,6 +67,10 @@ export async function middleware(request: NextRequest) {
   const org = nextUrl.searchParams.get('org');
   const url = new URL(nextUrl).search;
   if (nextUrl.href.indexOf('/auth') === -1 && !authCookie) {
+    // Redirect root to landing page for unauthenticated users
+    if (nextUrl.pathname === '/') {
+      return NextResponse.redirect(new URL('/home', nextUrl.href));
+    }
     const providers = ['google', 'settings'];
     const findIndex = providers.find((p) => nextUrl.href.indexOf(p) > -1);
     const additional = !findIndex
