@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: smoke
+      POSTGRES_PASSWORD: disposable-smoke-only
+      POSTGRES_DB: postiz
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U smoke -d postiz']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  redis:
+    image: redis:7.2-alpine
+    command: [redis-server, --save, '', --appendonly, 'no']
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  app:
+    image: ${POSTIZ_TEST_IMAGE:?Set the local candidate tag}
+    pull_policy: never
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://smoke:disposable-smoke-only@postgres:5432/postiz
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: disposable-smoke-only-no-real-users-or-accounts
+      FRONTEND_URL: http://localhost:5000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:5000/api
+      BACKEND_INTERNAL_URL: http://localhost:3000
+      STORAGE_PROVIDER: local
+      UPLOAD_DIRECTORY: /uploads
+      NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: /uploads
+      IS_GENERAL: 'true'
+      DISABLE_REGISTRATION: 'true'
+    tmpfs:
+      - /uploads
+      - /config
+# No host ports, real volumes, production credentials, or outgoing social API access.
+networks:
+  default:
+    internal: true

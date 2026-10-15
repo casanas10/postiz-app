@@ -1,38 +1,25 @@
-name: Build and Publish PR Docker Image
-
+name: Check runtime packaging on PRs
 on:
-  pull_request_target:
-    types: [opened, synchronize]
-
-permissions: write-all
-
+  pull_request:
+    paths:
+      - Dockerfile.runtime
+      - .dockerignore
+      - var/docker/**
+      - .github/workflows/**
+permissions:
+  contents: read
 jobs:
-  build-and-publish:
-    runs-on: ubuntu-latest
-
-    environment: 
-      name: build-pr
-
+  check:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
-      - name: Set image tag
-        id: vars
-        run: echo "IMAGE_TAG=ghcr.io/gitroomhq/postiz-app-pr:${{ github.event.pull_request.number }}" >> $GITHUB_ENV
-
-      - name: Build Docker image from Dockerfile.dev
-        run: docker build -f Dockerfile.dev -t $IMAGE_TAG .
-
-      - name: Push Docker image to GHCR
-        run: docker push $IMAGE_TAG
+          persist-credentials: false
+      - run: |
+          sh -n var/docker/runtime/start.sh
+          bash -n var/docker/runtime/smoke.sh var/docker/docker-build.sh
+          node --check var/docker/runtime/check.cjs
+          node --check var/docker/runtime/http-check.cjs
+          node --check var/docker/runtime/ecosystem.config.cjs
+          docker buildx build --check --file Dockerfile.runtime .

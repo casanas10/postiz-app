@@ -1,0 +1,59 @@
+# syntax=docker/dockerfile:1.7
+# Keep the deployed Node major/minor while changing packaging only.
+ARG NODE_IMAGE=node:22.20-alpine
+FROM ${NODE_IMAGE} AS toolchain
+RUN apk add --no-cache g++ make python3 bash openssl \
+ && npm --no-update-notifier --no-fund --global install pnpm@10.6.1
+WORKDIR /app
+# Do not copy a developer's .npmrc (it can contain registry credentials).
+RUN printf 'node-linker=hoisted\ninject-workspace-packages=true\n' > .npmrc
+
+FROM toolchain AS build
+COPY . .
+ARG NEXT_PUBLIC_VERSION=v1.47.0
+ENV NEXT_PUBLIC_VERSION=${NEXT_PUBLIC_VERSION} NEXT_TELEMETRY_DISABLED=1
+RUN --mount=type=cache,id=postiz-pnpm-arm64,target=/pnpm/store \
+    pnpm install --frozen-lockfile --ignore-scripts --store-dir=/pnpm/store \
+ && pnpm rebuild bcrypt \
+ && pnpm exec prisma generate --schema libraries/nestjs-libraries/src/database/prisma/schema.prisma
+RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm run build \
+ && rm -rf apps/frontend/.next/cache
+
+# Install production dependencies separately; no workspace source or devDependencies.
+# All deployed application workspaces have empty dependency manifests.
+FROM toolchain AS production-dependencies
+COPY package.json pnpm-lock.yaml ./
+RUN --mount=type=cache,id=postiz-pnpm-arm64,target=/pnpm/store \
+    pnpm install --prod --frozen-lockfile --ignore-scripts --store-dir=/pnpm/store \
+ && pnpm rebuild bcrypt
+
+FROM ${NODE_IMAGE} AS runtime
+ARG NEXT_PUBLIC_VERSION=v1.47.0
+ARG VCS_REF=unknown
+ENV NODE_ENV=production NEXT_PUBLIC_VERSION=${NEXT_PUBLIC_VERSION} \
+    NEXT_TELEMETRY_DISABLED=1 PM2_HOME=/tmp/postiz-pm2
+LABEL org.opencontainers.image.source="https://github.com/casanas10/postiz-app" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="${NEXT_PUBLIC_VERSION}" \
+      org.opencontainers.image.licenses="AGPL-3.0"
+RUN apk add --no-cache nginx openssl libstdc++ \
+ && adduser -D -g www www \
+ && mkdir -p /www /uploads /config /var/lib/nginx \
+ && chown -R www:www /www /var/lib/nginx \
+ && npm --no-update-notifier --no-fund --global install pm2@6.0.14 prisma@6.5.0 \
+ && npm cache clean --force
+WORKDIR /app
+COPY --from=production-dependencies /app/node_modules ./node_modules
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=build /app/apps/frontend/.next ./apps/frontend/.next
+COPY --from=build /app/apps/frontend/public ./apps/frontend/public
+COPY apps/frontend/package.json apps/frontend/next.config.js ./apps/frontend/
+COPY --from=build /app/apps/backend/dist ./apps/backend/dist
+COPY --from=build /app/apps/workers/dist ./apps/workers/dist
+COPY --from=build /app/apps/cron/dist ./apps/cron/dist
+COPY libraries/nestjs-libraries/src/database/prisma/schema.prisma ./libraries/nestjs-libraries/src/database/prisma/schema.prisma
+COPY package.json version.txt LICENSE ./
+COPY var/docker/nginx.conf /etc/nginx/nginx.conf
+COPY var/docker/runtime/ ./runtime/
+EXPOSE 5000
+ENTRYPOINT ["sh", "/app/runtime/start.sh"]

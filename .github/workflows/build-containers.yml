@@ -1,101 +1,107 @@
----
-name: "Build Containers"
+name: Postiz ARM64 runtime
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the tested image after private GHCR setup has been approved'
+        type: boolean
+        default: false
   push:
-    tags:
-      - '*'
+    branches: [codex/postiz-arm64-runtime]
+    paths:
+      - Dockerfile.runtime
+      - .dockerignore
+      - var/docker/**
+      - .github/workflows/build-containers.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: postiz-arm64-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-containers-common:
-    runs-on: ubuntu-latest
-    outputs:
-      containerver: ${{ steps.getcontainerver.outputs.containerver }}
+  validate:
+    if: github.repository == 'casanas10/postiz-app'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      POSTIZ_TEST_IMAGE: postiz-runtime:sha-${{ github.sha }}
     steps:
-      - name: Get Container Version
-        id: getcontainerver
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Verify native architecture and capacity
         run: |
-          echo "containerver=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          test "$(uname -m)" = aarch64
+          df -h .
+          docker info --format '{{.Architecture}}'
+      - name: Build runtime from locked dependencies
+        run: |
+          docker buildx build --platform linux/arm64 --file Dockerfile.runtime \
+            --target runtime --load --tag "$POSTIZ_TEST_IMAGE" \
+            --build-arg "VCS_REF=$GITHUB_SHA" \
+            --build-arg "NEXT_PUBLIC_VERSION=$(cat version.txt)" .
+      - name: Validate native modules and isolated application
+        run: bash var/docker/runtime/smoke.sh
+      - name: Record candidate size and provenance
+        run: |
+          docker image inspect "$POSTIZ_TEST_IMAGE" \
+            --format 'Image={{.Id}} Architecture={{.Architecture}} SizeBytes={{.Size}}' | tee -a "$GITHUB_STEP_SUMMARY"
+          docker run --rm --network none --entrypoint sh "$POSTIZ_TEST_IMAGE" \
+            -c 'du -sk /app /app/node_modules /app/apps/frontend/.next; node --version' | tee -a "$GITHUB_STEP_SUMMARY"
+          printf 'Source: %s\nPublish: disabled unless separately approved and requested.\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
 
-  build-containers:
-    needs: build-containers-common
-    strategy:
-      matrix:
-        include:
-          - runnertags: ubuntu-latest
-            arch: amd64
-          - runnertags: ubuntu-24.04-arm
-            arch: arm64
-    runs-on: ${{ matrix.runnertags }}
+  publish:
+    needs: validate
+    # Set this variable only after action-time approval of package creation/linking.
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.publish &&
+      github.repository == 'casanas10/postiz-app' &&
+      vars.POSTIZ_GHCR_APPROVED == 'ghcr.io/casanas10/postiz-app:private'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    env:
+      POSTIZ_TEST_IMAGE: ghcr.io/casanas10/postiz-app:sha-${{ github.sha }}-run-${{ github.run_id }}-${{ github.run_attempt }}-arm64
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to ghcr
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
-      - name: Build and Push Image
+          persist-credentials: false
+      - name: Require an existing verified private package
         env:
-          CONTAINERVER: ${{ needs.build-containers-common.outputs.containerver }}
-          NEXT_PUBLIC_VERSION: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          docker buildx build --platform linux/${{ matrix.arch }} \
-            -f Dockerfile.dev \
-            -t ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }}-${{ matrix.arch }} \
-            --build-arg NEXT_PUBLIC_VERSION=${{ env.NEXT_PUBLIC_VERSION }} \
-            --provenance=false --sbom=false \
-            --output "type=registry,name=ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }}-${{ matrix.arch }}" .
-
-  build-container-manifest:
-    needs: [build-containers, build-containers-common]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Login to ghcr
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
-      - name: Create Docker Manifest
+          # Fail closed on 403/404. Never assume a missing response means a new package.
+          gh api users/casanas10/packages/container/postiz-app \
+            --jq 'select(.visibility == "private" and .repository.full_name == "casanas10/postiz-app") | .name' > package-name.txt
+          test "$(cat package-name.txt)" = postiz-app
+      - name: Build and test the exact image to publish
+        run: |
+          test "$(uname -m)" = aarch64
+          docker buildx build --platform linux/arm64 --file Dockerfile.runtime \
+            --target runtime --load --tag "$POSTIZ_TEST_IMAGE" \
+            --build-arg "VCS_REF=$GITHUB_SHA" \
+            --build-arg "NEXT_PUBLIC_VERSION=$(cat version.txt)" .
+          bash var/docker/runtime/smoke.sh
+      - name: Sign in with the short-lived workflow token
         env:
-          CONTAINERVER: ${{ needs.build-containers-common.outputs.containerver }}
+          GH_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Publish immutable release tag and record digest
         run: |
-          # Verify the architecture images
-          echo "Verifying AMD64 image:"
-          docker buildx imagetools inspect ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }}-amd64
-          
-          echo "Verifying ARM64 image:"
-          docker buildx imagetools inspect ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }}-arm64
-          
-          # Try to remove any existing manifests first
-          docker manifest rm ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }} || true
-          docker manifest rm ghcr.io/gitroomhq/postiz-app:latest || true
-          
-          # Create and push the version-specific manifest
-          docker manifest create ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }} \
-            --amend ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }}-amd64 \
-            --amend ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }}-arm64
-
-          docker manifest push ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }}
-
-          # Create and push the latest manifest
-          docker manifest create ghcr.io/gitroomhq/postiz-app:latest \
-            --amend ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }}-amd64 \
-            --amend ghcr.io/gitroomhq/postiz-app:${{ env.CONTAINERVER }}-arm64
-
-          docker manifest push ghcr.io/gitroomhq/postiz-app:latest
-
-      - name: Verify Manifest
-        run: |
-          docker manifest inspect ghcr.io/gitroomhq/postiz-app:latest
+          docker push "$POSTIZ_TEST_IMAGE"
+          docker image inspect "$POSTIZ_TEST_IMAGE" \
+            --format 'Image={{.Id}} SizeBytes={{.Size}} Digests={{json .RepoDigests}}' >> "$GITHUB_STEP_SUMMARY"
+          printf 'Source: %s\nTag: %s\nProduction deployment requires separate approval.\n' "$GITHUB_SHA" "$POSTIZ_TEST_IMAGE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Check private visibility after publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test "$(gh api users/casanas10/packages/container/postiz-app --jq .visibility)" = private
+      - name: Sign out
+        if: always()
+        run: docker logout ghcr.io

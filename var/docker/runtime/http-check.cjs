@@ -1,0 +1,20 @@
+const assert = require('node:assert/strict');
+(async () => {
+  const app = await fetch('http://127.0.0.1:5000/auth');
+  assert.equal(app.status, 200, 'frontend through nginx');
+  const html = await app.text();
+  const asset = html.match(/(?:src|href)="([^" ]*\/_next\/static\/[^" ]+)"/);
+  assert(asset, 'frontend static asset in rendered page');
+  assert.equal((await fetch(new URL(asset[1], 'http://127.0.0.1:5000'))).status, 200);
+  assert.equal((await fetch('http://127.0.0.1:5000/api/user/self')).status, 401, 'backend authentication gate');
+  const sharp = require('sharp');
+  await sharp({create:{width:8,height:8,channels:3,background:'#2255aa'}}).png().toFile('/uploads/runtime-smoke.png');
+  const media = await fetch('http://127.0.0.1:5000/uploads/runtime-smoke.png');
+  assert.equal(media.status, 200);
+  assert.equal((await sharp(Buffer.from(await media.arrayBuffer())).metadata()).width, 8);
+  const {PrismaClient} = require('@prisma/client');
+  const db = new PrismaClient();
+  await db.$queryRaw`SELECT 1`;
+  await db.$disconnect();
+  console.log('PASS: frontend HTML/static assets, backend 401, media encode/serve, database query');
+})().catch(e => { console.error(e); process.exit(1); });
