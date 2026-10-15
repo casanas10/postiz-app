@@ -1,0 +1,67 @@
+name: Initialize private Postiz GHCR package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'After owner approval, enter ghcr.io/casanas10/postiz-app'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: postiz-ghcr-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  initialize:
+    # This workflow must first land on main with the read-only PR workflow.
+    if: >-
+      github.repository == 'casanas10/postiz-app' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.package == 'ghcr.io/casanas10/postiz-app' &&
+      vars.POSTIZ_GHCR_APPROVED == 'ghcr.io/casanas10/postiz-app:private'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BOOTSTRAP_IMAGE: ghcr.io/casanas10/postiz-app:bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Verify owner package listing and absence
+        run: |
+          # A successful owner listing is required. Do not treat 403/404 as absence.
+          gh api --paginate 'users/casanas10/packages?package_type=container&per_page=100' \
+            --jq '.[] | select(.name == "postiz-app") | .name' > existing-package.txt
+          test ! -s existing-package.txt
+      - name: Build public-text-only bootstrap marker
+        run: |
+          test "$(uname -m)" = aarch64
+          mkdir bootstrap-context
+          printf 'Private Postiz registry initialization marker; not a runnable release.\n' > bootstrap-context/README.txt
+          cat > bootstrap-context/Dockerfile <<'DOCKERFILE'
+          FROM scratch
+          LABEL org.opencontainers.image.source="https://github.com/casanas10/postiz-app"
+          LABEL org.opencontainers.image.description="Registry setup marker; not a Postiz release"
+          COPY README.txt /README.txt
+          DOCKERFILE
+          docker build --tag "$BOOTSTRAP_IMAGE" bootstrap-context
+      - name: Initialize package with short-lived workflow credentials
+        run: |
+          # GitHub documents private as the initial package visibility.
+          # Only this public marker is uploaded before checking the actual visibility.
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$BOOTSTRAP_IMAGE"
+      - name: Require private visibility and correct repository linkage
+        run: |
+          gh api users/casanas10/packages/container/postiz-app \
+            --jq 'select(.visibility == "private" and .repository.full_name == "casanas10/postiz-app") | .name' > verified-package.txt
+          test "$(cat verified-package.txt)" = postiz-app
+          printf 'Verified private package: ghcr.io/casanas10/postiz-app\nLinked repository: casanas10/postiz-app\nMarker: %s\nNo Postiz runtime was published by this workflow.\n' "$BOOTSTRAP_IMAGE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Sign out
+        if: always()
+        run: docker logout ghcr.io

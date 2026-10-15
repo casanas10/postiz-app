@@ -68,20 +68,44 @@ The PR workflow has no package-write token and never publishes.
 
 ### Required secure handoff before first publication
 
-Package inspection previously failed with missing `read:packages`; that denial
-has not been bypassed. Repository admin access does not establish GHCR access.
-An approved package read identity is needed to establish whether
-`ghcr.io/casanas10/postiz-app` already exists and is private. If it exists without
-repository access, linking/granting access requires separate action-time
-approval. If it is absent, first-package initialization also requires explicit
-approval of its repository access; the current release workflow intentionally
-cannot bootstrap an unverified package.
+On 2026-10-15 UTC, the owner approved adding only `read:packages` to the existing
+Mac GitHub CLI login and completed GitHub's device authorization. The authenticated
+owner package listing succeeded with zero container packages; the exact
+`postiz-app` lookup returned 404. The publication approval variable is unset.
+No package or write credential has been created.
+
+The default branch still has the old `pull_request_target` workflow with
+`write-all`, which checks out a PR's head. Before granting package access, activate
+this scoped branch on `main`, including its read-only PR workflow replacement.
+Do not open a PR that would trigger the old workflow before replacing it.
+
+After separate action-time approval of package creation, repository access and
+the approval variable, set `POSTIZ_GHCR_APPROVED` to
+`ghcr.io/casanas10/postiz-app:private`. Manually dispatch `bootstrap-ghcr.yml` on
+`main` with `package=ghcr.io/casanas10/postiz-app`. It requires a successful empty
+package lookup and publishes only a tiny public-text marker using the ephemeral
+workflow token. It then verifies private visibility and exact repository linkage.
+It aborts on lookup/permission errors or an existing package and never modifies
+visibility or deletes anything. The marker is retained as initialization evidence.
+
+GitHub documents [private initial visibility and automatic workflow repository
+linkage](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#pushing-container-images).
+Linkage gives the workflow repository package access. Access inheritance does
+[not change package visibility](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#about-inheritance-of-access-permissions);
+GitHub also cautions that granting public repositories private-package access
+can allow fork workflows access. Review package settings after initialization.
+No additional user, repository or long-lived publishing token is granted here.
+
+Only after the marker passes and owner metadata independently confirms private
+visibility should `build-containers.yml` be manually dispatched on the reviewed
+commit with `publish=true`. The ordinary release job still rejects missing or
+non-private packages. Package creation does not authorize production rollout.
 
 Production pulls need an expiring classic PAT with **read:packages only**, owned
 by an identity allowed to read this package. Enter it through a secure terminal
 or secret handoff, never chat, a command argument, Git, a build arg or a log.
 Credential creation, storage, package access changes and approval-variable setup
-are not performed by this branch. No write/delete package PAT is required for
+require separate approval. No write/delete package PAT is required for
 routine builds. No paid runner or plan is configured.
 
 ## Production rollout gate and rollback

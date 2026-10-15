@@ -8,7 +8,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [codex/postiz-arm64-runtime]
+    branches: [main, codex/postiz-arm64-runtime]
     paths:
       - Dockerfile.runtime
       - .dockerignore
