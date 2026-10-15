@@ -82,10 +82,18 @@ Do not open a PR that would trigger the old workflow before replacing it.
 After separate action-time approval of package creation, repository access and
 the approval variable, set `POSTIZ_GHCR_APPROVED` to
 `ghcr.io/casanas10/postiz-app:private`. Manually dispatch `bootstrap-ghcr.yml` on
-`main` with `package=ghcr.io/casanas10/postiz-app`. It requires a successful empty
-package lookup and publishes only a tiny public-text marker using the ephemeral
+`main` with `package=ghcr.io/casanas10/postiz-app` and `owner_checked_at` set to
+the UTC timestamp of a successful owner-authenticated absence check performed
+within the preceding ten minutes. The dispatcher must first list all container
+packages using the owner's approved `read:packages` login and confirm no exact
+`postiz-app` name exists. Stop if that lookup fails or finds an existing package;
+a 404 alone is insufficient evidence. The initial Actions-token account-wide
+listing returned HTTP 400 before uploading anything, so the approved owner login
+performs this check; no owner credential is copied to the runner.
+
+The workflow publishes only a tiny public-text marker using the ephemeral
 workflow token. It then verifies private visibility and exact repository linkage.
-It aborts on lookup/permission errors or an existing package and never modifies
+The release job aborts on metadata/permission errors. Neither workflow modifies
 visibility or deletes anything. The marker is retained as initialization evidence.
 
 GitHub documents [private initial visibility and automatic workflow repository

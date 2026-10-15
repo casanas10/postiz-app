@@ -7,6 +7,10 @@ on:
         description: 'After owner approval, enter ghcr.io/casanas10/postiz-app'
         type: string
         required: true
+      owner_checked_at:
+        description: 'UTC timestamp of successful owner-authenticated package absence check (within 10 minutes)'
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -31,13 +35,20 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       BOOTSTRAP_IMAGE: ghcr.io/casanas10/postiz-app:bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+      OWNER_CHECKED_AT: ${{ inputs.owner_checked_at }}
     steps:
-      - name: Verify owner package listing and absence
+      - name: Require a fresh owner-authenticated absence check
         run: |
-          # A successful owner listing is required. Do not treat 403/404 as absence.
-          gh api --paginate 'users/casanas10/packages?package_type=container&per_page=100' \
-            --jq '.[] | select(.name == "postiz-app") | .name' > existing-package.txt
-          test ! -s existing-package.txt
+          # The Actions token's account-wide listing returns HTTP 400 here.
+          # The dispatcher must first use the owner's approved read scope to
+          # obtain a successful complete listing with no postiz-app package.
+          # A failed request or a 404 alone is not an absence check.
+          [[ "$OWNER_CHECKED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]
+          checked_epoch=$(date --date="$OWNER_CHECKED_AT" +%s)
+          age=$(( $(date +%s) - checked_epoch ))
+          test "$age" -ge 0
+          test "$age" -le 600
+          printf 'Owner verified package absence at %s\n' "$OWNER_CHECKED_AT" >> "$GITHUB_STEP_SUMMARY"
       - name: Build public-text-only bootstrap marker
         run: |
           test "$(uname -m)" = aarch64
