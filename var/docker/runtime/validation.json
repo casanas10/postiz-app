@@ -1,0 +1,41 @@
+{
+  "observed_at": "2026-10-15T01:50:10Z",
+  "baseline_source": "871dda4e7de40a42bab2a399352166d1c62198fc",
+  "tested_source": "b373b1b5dbe4452dc15ad09623b65f307f821006",
+  "run_url": "https://github.com/casanas10/postiz-app/actions/runs/38666924647",
+  "conclusion": "success",
+  "architecture": "arm64",
+  "image_id": "sha256:120a0be0a9619274660642626293da89c51ad4744a93236c37b7222073d00a5d",
+  "runtime_recipe_sha256": "3a14ebabe53ac041cfa14c297bebf746c840d7b125b00d9f0f34f5b60dc4718b",
+  "baseline_image_id": "sha256:3fccf0a2ba1be2ad6bafc234672fc6ca3bd44fecb5e08de45818b192d5cbf5bf",
+  "uncompressed_layers": {
+    "baseline_bytes": 6303768576,
+    "candidate_bytes": 3140389896,
+    "reduction_bytes": 3163378680,
+    "reduction_percent": 50.1823
+  },
+  "size_note": "Comparable uncompressed Docker image-history totals. No compressed registry-transfer comparison or production disk recovery is claimed. Directory du figures from this run are not independent; the reporting-only follow-up fixes that accounting.",
+  "passed_checks": [
+    "ARM64, runtime contents, Prisma CLI/client, bcrypt, sharp PNG and Sentry native module",
+    "frontend HTML/static assets, backend 401, media encode/serve, database query",
+    "isolated startup and restart with all four processes"
+  ],
+  "stable_processes": {
+    "backend": 0,
+    "workers": 0,
+    "cron": 0,
+    "frontend": 0
+  },
+  "application_files_compared": 810,
+  "application_files_changed": 0,
+  "lockfile_sha256": "97a83442f870dc5b92410a6bfa0abf7ac129b53c94c18ae497b6bcbb1353ee56",
+  "prisma_schema_sha256": "feef68e5e939a271f0940a0f0275ec05c8d8436220ed12180d9791b3b6292727",
+  "ghcr_publication": "skipped; private package access and approval unresolved",
+  "production_deployment": false,
+  "limitations": [
+    "No real social account or publishing action tested",
+    "Production backup restoration and older rollback images not tested in this task",
+    "Candidate image existed only in the ephemeral runner; publish job rebuilds and tests the exact image before pushing",
+    "Non-blocking checkout v4 Node 20 deprecation warning; GitHub ran it on Node 24 successfully"
+  ]
+}

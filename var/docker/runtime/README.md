@@ -118,3 +118,26 @@ The previous retention evidence at
 `/root/postiz-retention-backup-20261014T122132Z/verified-result.json` contains a
 stale order-sensitive mount comparison. The prior audit subsequently verified
 identical mounts read-only. This branch does not retry its denied report write.
+
+## Verified result — 2026-10-15
+
+Two native ARM64 runs passed. The pinned runtime recipe was tested at
+`b373b1b5dbe4452dc15ad09623b65f307f821006` in
+[run 38666924647](https://github.com/casanas10/postiz-app/actions/runs/38666924647) (9 minutes 31 seconds).
+The exact candidate was `sha256:120a0be0a9619274660642626293da89c51ad4744a93236c37b7222073d00a5d`.
+
+| Comparable uncompressed layer total | Bytes | GiB |
+| --- | ---: | ---: |
+| Current production image | 6,303,768,576 | 5.87 |
+| Tested candidate | 3,140,389,896 | 2.92 |
+| Reduction | 3,163,378,680 | 2.95 |
+
+Reduction: **50.18%**. This does not claim compressed registry
+transfer savings or freed production disk space. All old images remain.
+
+The native dependency, isolated database, four-process stability, HTTP/static
+asset, PNG/media and restart checks passed. No real social account was used.
+Publishing was skipped. No production service or credential changed.
+`validation.json` records the source and image hashes, exact measurements and
+limits. The evidence/reporting follow-up changes no runtime recipe or smoke test;
+it corrects independent directory-size reporting without another image rebuild.
