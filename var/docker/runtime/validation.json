@@ -1,20 +1,20 @@
 {
-  "observed_at": "2026-10-15T01:50:10Z",
+  "observed_at": "2026-10-15T02:38:50Z",
   "baseline_source": "871dda4e7de40a42bab2a399352166d1c62198fc",
-  "tested_source": "b373b1b5dbe4452dc15ad09623b65f307f821006",
-  "run_url": "https://github.com/casanas10/postiz-app/actions/runs/38666924647",
+  "tested_source": "b637fdb269e2064423c96b2864a34bbd79edda86",
+  "run_url": "https://github.com/casanas10/postiz-app/actions/runs/38670168905",
   "conclusion": "success",
   "architecture": "arm64",
-  "image_id": "sha256:120a0be0a9619274660642626293da89c51ad4744a93236c37b7222073d00a5d",
+  "image_id": "sha256:96e40321c5028a16ecb90fb2538f9ef0512bc1c55147cab710cef17298372b68",
   "runtime_recipe_sha256": "3a14ebabe53ac041cfa14c297bebf746c840d7b125b00d9f0f34f5b60dc4718b",
   "baseline_image_id": "sha256:3fccf0a2ba1be2ad6bafc234672fc6ca3bd44fecb5e08de45818b192d5cbf5bf",
   "uncompressed_layers": {
     "baseline_bytes": 6303768576,
-    "candidate_bytes": 3140389896,
-    "reduction_bytes": 3163378680,
-    "reduction_percent": 50.1823
+    "candidate_bytes": 3140385610,
+    "reduction_bytes": 3163382966,
+    "reduction_percent": 50.18241
   },
-  "size_note": "Comparable uncompressed Docker image-history totals. No compressed registry-transfer comparison or production disk recovery is claimed. Directory du figures from this run are not independent; the reporting-only follow-up fixes that accounting.",
+  "size_note": "Baseline: summed uncompressed image-history layer sizes. Published candidate: classic Docker engine uncompressed image Size, recorded in the publish job summary. In the independent validation job, image Size and summed history both equal 3140386748 bytes. No compressed-transfer or recovered production-disk claim.",
   "passed_checks": [
     "ARM64, runtime contents, Prisma CLI/client, bcrypt, sharp PNG and Sentry native module",
     "frontend HTML/static assets, backend 401, media encode/serve, database query",
@@ -30,12 +30,36 @@
   "application_files_changed": 0,
   "lockfile_sha256": "97a83442f870dc5b92410a6bfa0abf7ac129b53c94c18ae497b6bcbb1353ee56",
   "prisma_schema_sha256": "feef68e5e939a271f0940a0f0275ec05c8d8436220ed12180d9791b3b6292727",
-  "ghcr_publication": "skipped; private package access and approval unresolved",
+  "ghcr_publication": "success; exact published image passed native, application and restart checks before push; private visibility confirmed after push",
   "production_deployment": false,
   "limitations": [
     "No real social account or publishing action tested",
-    "Production backup restoration and older rollback images not tested in this task",
-    "Candidate image existed only in the ephemeral runner; publish job rebuilds and tests the exact image before pushing",
+    "Published digest has not yet been pulled to or run in production; dedicated read credential and rollout approval remain pending",
+    "No cross-database/filesystem transaction snapshot: live writes continued during individual backups",
     "Non-blocking checkout v4 Node 20 deprecation warning; GitHub ran it on Node 24 successfully"
-  ]
+  ],
+  "registry_digest": "sha256:590ad8188b733dd43efc5eebebd04c465924d955317662c48dde6b41ca2a9d12",
+  "registry_tag": "ghcr.io/casanas10/postiz-app:sha-b637fdb269e2064423c96b2864a34bbd79edda86-run-38670168905-1-arm64",
+  "registry_visibility": "private",
+  "validation_build": {
+    "image_id": "sha256:6f105870210c97d82ea0a00ca4c4a6221e40dc0b8b0e507ca35f814b5455987a",
+    "image_size_bytes": 3140386748,
+    "uncompressed_history_bytes": 3140386748
+  },
+  "job_durations_seconds": {
+    "validate": 616,
+    "publish": 678
+  },
+  "prior_run_urls": [
+    "https://github.com/casanas10/postiz-app/actions/runs/38666094294",
+    "https://github.com/casanas10/postiz-app/actions/runs/38666924647"
+  ],
+  "rollback_rehearsal": {
+    "backup_directory": "/root/postiz-runtime-release-20261015T022102Z",
+    "database_restore": "passed",
+    "restored_public_base_tables": 45,
+    "uploads_restore": "passed",
+    "config_restore": "passed",
+    "production_service_changes": false
+  }
 }

@@ -66,48 +66,50 @@ written. The run summary records image ID, size and registry digest. Deployment
 must use the digest. There is no SSH credential or production deployment step.
 The PR workflow has no package-write token and never publishes.
 
-### Required secure handoff before first publication
+### Established package access
 
 On 2026-10-15 UTC, the owner approved adding only `read:packages` to the existing
 Mac GitHub CLI login and completed GitHub's device authorization. The authenticated
 owner package listing succeeded with zero container packages; the exact
-`postiz-app` lookup returned 404. The publication approval variable is unset.
-No package or write credential has been created.
+`postiz-app` lookup returned 404. The owner subsequently approved activating
+these changes on `main`, creating the private package with repository Actions
+access, enabling the publication gate and publishing the tested runtime.
 
-The default branch still has the old `pull_request_target` workflow with
-`write-all`, which checks out a PR's head. Before granting package access, activate
-this scoped branch on `main`, including its read-only PR workflow replacement.
-Do not open a PR that would trigger the old workflow before replacing it.
+The scoped packaging changes are active on `main`; the old `pull_request_target`
+workflow with `write-all` has been replaced by the read-only PR workflow. The
+package is now **private** and linked to `casanas10/postiz-app`. Its settings give
+only this repository Actions **Write** access. Source-repository access inheritance
+is disabled; there are no additional package members or Codespaces grants.
+The approval variable is set to `ghcr.io/casanas10/postiz-app:private`.
 
-After separate action-time approval of package creation, repository access and
-the approval variable, set `POSTIZ_GHCR_APPROVED` to
-`ghcr.io/casanas10/postiz-app:private`. Manually dispatch `bootstrap-ghcr.yml` on
-`main` with `package=ghcr.io/casanas10/postiz-app` and `owner_checked_at` set to
-the UTC timestamp of a successful owner-authenticated absence check performed
-within the preceding ten minutes. The dispatcher must first list all container
-packages using the owner's approved `read:packages` login and confirm no exact
-`postiz-app` name exists. Stop if that lookup fails or finds an existing package;
-a 404 alone is insufficient evidence. The initial Actions-token account-wide
-listing returned HTTP 400 before uploading anything, so the approved owner login
-performs this check; no owner credential is copied to the runner.
+The one-time `bootstrap-ghcr.yml` workflow is disabled. Do not rerun it for this
+existing package. Routine release jobs use the short-lived `GITHUB_TOKEN`; no
+owner credential or long-lived publishing token is copied to a runner.
 
-The workflow publishes only a tiny public-text marker using the ephemeral
-workflow token. It then verifies private visibility and exact repository linkage.
-The release job aborts on metadata/permission errors. Neither workflow modifies
-visibility or deletes anything. The marker is retained as initialization evidence.
+### Initialization evidence
 
-GitHub documents [private initial visibility and automatic workflow repository
-linkage](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#pushing-container-images).
-Linkage gives the workflow repository package access. Access inheritance does
-[not change package visibility](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#about-inheritance-of-access-permissions);
-GitHub also cautions that granting public repositories private-package access
-can allow fork workflows access. Review package settings after initialization.
-No additional user, repository or long-lived publishing token is granted here.
+The [first setup run](https://github.com/casanas10/postiz-app/actions/runs/38669657586)
+stopped before upload because the Actions-token account-wide package listing
+returned HTTP 400. The approved owner login successfully verified absence, and
+the corrected dispatcher supplied that fresh check without sending its credential
+to the runner.
 
-Only after the marker passes and owner metadata independently confirms private
-visibility should `build-containers.yml` be manually dispatched on the reviewed
+The [marker run](https://github.com/casanas10/postiz-app/actions/runs/38669875372)
+uploaded only a tiny public-text README, not any application, data or credentials.
+Although GitHub's documentation describes private initial visibility, the actual
+package was initially public. The visibility assertion failed and publication was
+blocked. GitHub's settings exposed and accepted a Private selection; both UI and
+the owner-authenticated API then confirmed private visibility at 02:16:21 UTC.
+Actions access was reduced from Admin to Write and inheritance disabled before
+any runtime publication. No package or version was deleted. The retained marker
+digest is `sha256:d0b9abbaa7c9a7fb4134107344d03fd26ca030ac927ea78981bf5a9c75ab6eae`.
+
+Only after owner metadata independently confirms private visibility should
+`build-containers.yml` be manually dispatched on the reviewed
 commit with `publish=true`. The ordinary release job still rejects missing or
 non-private packages. Package creation does not authorize production rollout.
+
+### Production read access remains a separate approval
 
 Production pulls need an expiring classic PAT with **read:packages only**, owned
 by an identity allowed to read this package. Enter it through a secure terminal
@@ -146,30 +148,66 @@ Postiz using `--pull never`; retain the old image before starting this process.
 Database/Redis/Caddy and the monitoring stack should not be recreated for an
 image-only rollout.
 
+### Prepared rollback evidence
+
+A fresh protected backup and restore rehearsal completed at 02:21 UTC on
+2026-10-15. The server directory is
+`/root/postiz-runtime-release-20261015T022102Z` (mode 0700, about 59 MiB including
+the extracted comparison files). It contains a PostgreSQL custom dump, uploads
+and config archives, Compose/environment backups, the current image ID and
+SHA-256 checksums. Secrets and application data stayed on the server.
+
+The dump restored successfully with `pg_restore --exit-on-error` into an isolated
+PostgreSQL container, producing 45 public base tables. Media and config archives
+were extracted and compared successfully. The rehearsal used no network, host
+ports or production mounts, with 512 MiB memory and 0.5 CPU limits. Its stopped
+container is retained; no existing container, volume or image was deleted.
+The database dump and file archives are individually consistent, but live writes
+were not paused for a cross-database/filesystem transaction snapshot.
+
+The production image ID and both named mounts were rechecked, and existing
+`json-file` logging remains capped at 10m × 3. Production Postiz, PostgreSQL and
+Redis stayed running throughout. The private-image pull credential and final
+image-only replacement still require separate approval.
+
 The previous retention evidence at
 `/root/postiz-retention-backup-20261014T122132Z/verified-result.json` contains a
 stale order-sensitive mount comparison. The prior audit subsequently verified
 identical mounts read-only. This branch does not retry its denied report write.
 
-## Verified result — 2026-10-15
+## Published release — 2026-10-15 UTC
 
-Two native ARM64 runs passed. The pinned runtime recipe was tested at
-`b373b1b5dbe4452dc15ad09623b65f307f821006` in
-[run 38666924647](https://github.com/casanas10/postiz-app/actions/runs/38666924647) (9 minutes 31 seconds).
-The exact candidate was `sha256:120a0be0a9619274660642626293da89c51ad4744a93236c37b7222073d00a5d`.
+[Run 38670168905](https://github.com/casanas10/postiz-app/actions/runs/38670168905)
+completed successfully for source `b637fdb269e2064423c96b2864a34bbd79edda86`.
+Native ARM64 validation passed in 10m 16s; the separate build, test and private
+publication job passed in 11m 18s. The published image ID is
+`sha256:96e40321c5028a16ecb90fb2538f9ef0512bc1c55147cab710cef17298372b68`.
+
+Use this immutable deployment reference after the production approval gate:
+
+```
+ghcr.io/casanas10/postiz-app@sha256:590ad8188b733dd43efc5eebebd04c465924d955317662c48dde6b41ca2a9d12
+```
+
+The tag is
+`sha-b637fdb269e2064423c96b2864a34bbd79edda86-run-38670168905-1-arm64`.
+The publishing job and independent owner API check both confirmed private
+visibility after upload. Anonymous metadata and registry pull-authorization
+checks were denied. The package retains its bootstrap marker as a second version.
 
 | Comparable uncompressed layer total | Bytes | GiB |
 | --- | ---: | ---: |
 | Current production image | 6,303,768,576 | 5.87 |
-| Tested candidate | 3,140,389,896 | 2.92 |
-| Reduction | 3,163,378,680 | 2.95 |
+| Published runtime | 3,140,385,610 | 2.92 |
+| Reduction | 3,163,382,966 | 2.95 |
 
 Reduction: **50.18%**. This does not claim compressed registry
 transfer savings or freed production disk space. All old images remain.
 
-The native dependency, isolated database, four-process stability, HTTP/static
-asset, PNG/media and restart checks passed. No real social account was used.
-Publishing was skipped. No production service or credential changed.
-`validation.json` records the source and image hashes, exact measurements and
-limits. The evidence/reporting follow-up changes no runtime recipe or smoke test;
-it corrects independent directory-size reporting without another image rebuild.
+The native dependency, isolated database, four-process stability (zero restarts),
+HTTP/static asset, PNG/media and restart checks passed on the exact published
+image. No real social account was used. Production remains on the preserved old
+image; a dedicated private-pull credential and rollout approval are still pending.
+`validation.json` records the source, image and registry hashes, exact measurements,
+earlier successful validation runs and remaining limits. Documentation/evidence
+follow-ups do not change the tested runtime recipe, application or smoke tests.
