@@ -52,6 +52,7 @@ jobs:
             --format 'Image={{.Id}} Architecture={{.Architecture}} SizeBytes={{.Size}}' | tee -a "$GITHUB_STEP_SUMMARY"
           docker run --rm --network none --entrypoint sh "$POSTIZ_TEST_IMAGE" \
             -c 'du -sk /app /app/node_modules /app/apps/frontend/.next; node --version' | tee -a "$GITHUB_STEP_SUMMARY"
+          docker image history --no-trunc --human=false --format '{{.Size}}' "$POSTIZ_TEST_IMAGE" | awk '{total += $1} END {printf "UncompressedLayerBytes=%.0f\n", total}' | tee -a "$GITHUB_STEP_SUMMARY"
           printf 'Source: %s\nPublish: disabled unless separately approved and requested.\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
 
   publish:
